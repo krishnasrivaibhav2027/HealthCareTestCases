@@ -1,58 +1,86 @@
-import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, jsonb, integer, boolean } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const requirements = pgTable("requirements", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  jiraKey: text("jira_key").notNull().unique(),
-  title: text("title").notNull(),
-  description: text("description").notNull(),
-  priority: text("priority").notNull(),
-  status: text("status").notNull(),
-  assignee: text("assignee"),
-  complianceStandards: text("compliance_standards").array(),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+// BigQuery table interfaces
+export interface Requirement {
+  id: string;
+  jira_key: string;
+  title: string;
+  description: string;
+  priority: string;
+  status: string;
+  assignee?: string;
+  compliance_standards: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TestCase {
+  id: string;
+  requirement_id?: string;
+  title: string;
+  description: string;
+  steps?: Array<{step: string, expectedResult: string}>;
+  priority: string;
+  compliance_checks: string[];
+  ai_generated: boolean;
+  reviewed: boolean;
+  reviewed_by?: string;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ComplianceReport {
+  id: string;
+  requirement_id?: string;
+  test_case_id?: string;
+  standard: string;
+  status: string; // compliant, non-compliant, review-needed
+  findings?: Array<{issue: string, severity: string}>;
+  created_at: string;
+}
+
+// Validation schemas for inserts (without id and timestamps)
+export const insertRequirementSchema = z.object({
+  jira_key: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().min(1),
+  priority: z.enum(['Critical', 'High', 'Medium', 'Low']),
+  status: z.string().min(1),
+  assignee: z.string().optional(),
+  compliance_standards: z.array(z.string()).default([]),
 });
 
-export const testCases = pgTable("test_cases", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  requirementId: varchar("requirement_id").references(() => requirements.id),
-  title: text("title").notNull(),
-  description: text("description").notNull(),
-  steps: jsonb("steps").$type<Array<{step: string, expectedResult: string}>>(),
-  priority: text("priority").notNull(),
-  complianceChecks: text("compliance_checks").array(),
-  aiGenerated: boolean("ai_generated").default(true),
-  reviewed: boolean("reviewed").default(false),
-  reviewedBy: text("reviewed_by"),
-  version: integer("version").default(1),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+export const insertTestCaseSchema = z.object({
+  requirement_id: z.string().optional(),
+  title: z.string().min(1),
+  description: z.string().min(1),
+  steps: z.array(z.object({
+    step: z.string(),
+    expectedResult: z.string()
+  })).optional(),
+  priority: z.enum(['Critical', 'High', 'Medium', 'Low']),
+  compliance_checks: z.array(z.string()).default([]),
+  ai_generated: z.boolean().default(true),
+  reviewed: z.boolean().default(false),
+  reviewed_by: z.string().optional(),
+  version: z.number().int().default(1),
 });
 
-export const complianceReports = pgTable("compliance_reports", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  requirementId: varchar("requirement_id").references(() => requirements.id),
-  testCaseId: varchar("test_case_id").references(() => testCases.id),
-  standard: text("standard").notNull(),
-  status: text("status").notNull(), // compliant, non-compliant, review-needed
-  findings: jsonb("findings").$type<Array<{issue: string, severity: string}>>(),
-  createdAt: timestamp("created_at").defaultNow(),
+export const insertComplianceReportSchema = z.object({
+  requirement_id: z.string().optional(),
+  test_case_id: z.string().optional(),
+  standard: z.enum(['FDA', 'IEC 62304', 'ISO 9001', 'ISO 13485', 'ISO 27001']),
+  status: z.enum(['compliant', 'non-compliant', 'review-needed']),
+  findings: z.array(z.object({
+    issue: z.string(),
+    severity: z.string()
+  })).optional(),
 });
-
-export const insertRequirementSchema = createInsertSchema(requirements).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertTestCaseSchema = createInsertSchema(testCases).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertComplianceReportSchema = createInsertSchema(complianceReports).omit({ id: true, createdAt: true });
 
 export type InsertRequirement = z.infer<typeof insertRequirementSchema>;
 export type InsertTestCase = z.infer<typeof insertTestCaseSchema>;
 export type InsertComplianceReport = z.infer<typeof insertComplianceReportSchema>;
-
-export type Requirement = typeof requirements.$inferSelect;
-export type TestCase = typeof testCases.$inferSelect;
-export type ComplianceReport = typeof complianceReports.$inferSelect;
 
 // Enums for consistency
 export const COMPLIANCE_STANDARDS = ['FDA', 'IEC 62304', 'ISO 9001', 'ISO 13485', 'ISO 27001'] as const;
