@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { Requirement, InsertTestCase, InsertComplianceReport } from '@shared/schema';
 
 // Initialize Gemini AI
