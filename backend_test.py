@@ -55,7 +55,7 @@ class HealthTestAITester:
                 if isinstance(data, list) and len(data) > 0:
                     # Check structure of first requirement
                     req = data[0]
-                    required_fields = ['id', 'jiraKey', 'title', 'description', 'priority', 'status']
+                    required_fields = ['id', 'jira_key', 'title', 'description', 'priority', 'status']
                     missing_fields = [field for field in required_fields if field not in req]
                     if missing_fields:
                         details += f", Missing fields: {missing_fields}"
