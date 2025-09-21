@@ -40,9 +40,9 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Initialize BigQuery dataset and tables
-  await initializeBigQuery();
-  log("BigQuery initialized successfully");
+  // Skip BigQuery initialization for now to avoid auth issues
+  // await initializeBigQuery();
+  // log("BigQuery initialized successfully");
   
   // Seed database with sample data
   await seedDatabase();
