@@ -82,7 +82,7 @@ class HealthTestAITester:
                 if isinstance(data, list) and len(data) > 0:
                     # Check structure of first test case
                     tc = data[0]
-                    required_fields = ['id', 'requirementId', 'title', 'description', 'steps']
+                    required_fields = ['id', 'requirement_id', 'title', 'description', 'steps']
                     missing_fields = [field for field in required_fields if field not in tc]
                     if missing_fields:
                         details += f", Missing fields: {missing_fields}"
