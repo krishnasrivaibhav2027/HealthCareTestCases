@@ -1,7 +1,4 @@
-import { 
-  requirements, 
-  testCases, 
-  complianceReports,
+import {
   type Requirement,
   type TestCase,
   type ComplianceReport,
@@ -9,8 +6,8 @@ import {
   type InsertTestCase,
   type InsertComplianceReport
 } from "@shared/schema";
-import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { BigQueryRepository, bigquery, DATASET_ID, TABLES } from "./db";
+import { v4 as uuidv4 } from 'uuid';
 
 // Reference: javascript_database integration
 // Healthcare test case generation storage interface
@@ -35,87 +32,177 @@ export interface IStorage {
   createComplianceReport(report: InsertComplianceReport): Promise<ComplianceReport>;
 }
 
-export class DatabaseStorage implements IStorage {
+export class BigQueryStorage implements IStorage {
   // Requirements
   async getRequirement(id: string): Promise<Requirement | undefined> {
-    const [requirement] = await db.select().from(requirements).where(eq(requirements.id, id));
-    return requirement || undefined;
+    const query = `SELECT * FROM \`${DATASET_ID}.${TABLES.requirements}\` WHERE id = @id LIMIT 1`;
+    const options = {
+      query,
+      params: { id }
+    };
+    
+    const [rows] = await bigquery.query(options);
+    return rows.length > 0 ? rows[0] as Requirement : undefined;
   }
 
   async getRequirementByJiraKey(jiraKey: string): Promise<Requirement | undefined> {
-    const [requirement] = await db.select().from(requirements).where(eq(requirements.jiraKey, jiraKey));
-    return requirement || undefined;
+    const query = `SELECT * FROM \`${DATASET_ID}.${TABLES.requirements}\` WHERE jira_key = @jiraKey LIMIT 1`;
+    const options = {
+      query,
+      params: { jiraKey }
+    };
+    
+    const [rows] = await bigquery.query(options);
+    return rows.length > 0 ? rows[0] as Requirement : undefined;
   }
 
   async getAllRequirements(): Promise<Requirement[]> {
-    return await db.select().from(requirements);
+    const query = `SELECT * FROM \`${DATASET_ID}.${TABLES.requirements}\` ORDER BY created_at DESC`;
+    const [rows] = await bigquery.query(query);
+    return rows as Requirement[];
   }
 
   async createRequirement(insertRequirement: InsertRequirement): Promise<Requirement> {
-    const [requirement] = await db
-      .insert(requirements)
-      .values(insertRequirement)
-      .returning();
-    return requirement;
+    const table = bigquery.dataset(DATASET_ID).table(TABLES.requirements);
+    const row = {
+      id: uuidv4(),
+      ...insertRequirement,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    await table.insert([row]);
+    return row as Requirement;
   }
 
   async updateRequirement(id: string, updateData: Partial<InsertRequirement>): Promise<Requirement> {
-    const [requirement] = await db
-      .update(requirements)
-      .set({ ...updateData, updatedAt: new Date() })
-      .where(eq(requirements.id, id))
-      .returning();
-    return requirement;
+    // BigQuery doesn't support UPDATE directly, so we need to use MERGE or recreate
+    // For now, we'll use a simpler approach by getting the existing record and recreating
+    const existing = await this.getRequirement(id);
+    if (!existing) {
+      throw new Error(`Requirement with id ${id} not found`);
+    }
+
+    // Delete existing record (BigQuery DELETE)
+    const deleteQuery = `DELETE FROM \`${DATASET_ID}.${TABLES.requirements}\` WHERE id = @id`;
+    await bigquery.query({
+      query: deleteQuery,
+      params: { id }
+    });
+
+    // Insert updated record
+    const table = bigquery.dataset(DATASET_ID).table(TABLES.requirements);
+    const updatedRow = {
+      ...existing,
+      ...updateData,
+      updated_at: new Date().toISOString()
+    };
+    
+    await table.insert([updatedRow]);
+    return updatedRow as Requirement;
   }
 
   // Test Cases
   async getTestCase(id: string): Promise<TestCase | undefined> {
-    const [testCase] = await db.select().from(testCases).where(eq(testCases.id, id));
-    return testCase || undefined;
+    const query = `SELECT * FROM \`${DATASET_ID}.${TABLES.testCases}\` WHERE id = @id LIMIT 1`;
+    const options = {
+      query,
+      params: { id }
+    };
+    
+    const [rows] = await bigquery.query(options);
+    return rows.length > 0 ? rows[0] as TestCase : undefined;
   }
 
   async getTestCasesByRequirement(requirementId: string): Promise<TestCase[]> {
-    return await db.select().from(testCases).where(eq(testCases.requirementId, requirementId));
+    const query = `SELECT * FROM \`${DATASET_ID}.${TABLES.testCases}\` WHERE requirement_id = @requirementId ORDER BY created_at DESC`;
+    const options = {
+      query,
+      params: { requirementId }
+    };
+    
+    const [rows] = await bigquery.query(options);
+    return rows as TestCase[];
   }
 
   async getAllTestCases(): Promise<TestCase[]> {
-    return await db.select().from(testCases);
+    const query = `SELECT * FROM \`${DATASET_ID}.${TABLES.testCases}\` ORDER BY created_at DESC`;
+    const [rows] = await bigquery.query(query);
+    return rows as TestCase[];
   }
 
   async createTestCase(insertTestCase: InsertTestCase): Promise<TestCase> {
-    const [testCase] = await db
-      .insert(testCases)
-      .values(insertTestCase)
-      .returning();
-    return testCase;
+    const table = bigquery.dataset(DATASET_ID).table(TABLES.testCases);
+    const row = {
+      id: uuidv4(),
+      ...insertTestCase,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    await table.insert([row]);
+    return row as TestCase;
   }
 
   async updateTestCase(id: string, updateData: Partial<InsertTestCase>): Promise<TestCase> {
-    const [testCase] = await db
-      .update(testCases)
-      .set({ ...updateData, updatedAt: new Date() })
-      .where(eq(testCases.id, id))
-      .returning();
-    return testCase;
+    const existing = await this.getTestCase(id);
+    if (!existing) {
+      throw new Error(`Test case with id ${id} not found`);
+    }
+
+    // Delete existing record
+    const deleteQuery = `DELETE FROM \`${DATASET_ID}.${TABLES.testCases}\` WHERE id = @id`;
+    await bigquery.query({
+      query: deleteQuery,
+      params: { id }
+    });
+
+    // Insert updated record
+    const table = bigquery.dataset(DATASET_ID).table(TABLES.testCases);
+    const updatedRow = {
+      ...existing,
+      ...updateData,
+      updated_at: new Date().toISOString()
+    };
+    
+    await table.insert([updatedRow]);
+    return updatedRow as TestCase;
   }
 
   // Compliance Reports
   async getComplianceReport(id: string): Promise<ComplianceReport | undefined> {
-    const [report] = await db.select().from(complianceReports).where(eq(complianceReports.id, id));
-    return report || undefined;
+    const query = `SELECT * FROM \`${DATASET_ID}.${TABLES.complianceReports}\` WHERE id = @id LIMIT 1`;
+    const options = {
+      query,
+      params: { id }
+    };
+    
+    const [rows] = await bigquery.query(options);
+    return rows.length > 0 ? rows[0] as ComplianceReport : undefined;
   }
 
   async getComplianceReportsByRequirement(requirementId: string): Promise<ComplianceReport[]> {
-    return await db.select().from(complianceReports).where(eq(complianceReports.requirementId, requirementId));
+    const query = `SELECT * FROM \`${DATASET_ID}.${TABLES.complianceReports}\` WHERE requirement_id = @requirementId ORDER BY created_at DESC`;
+    const options = {
+      query,
+      params: { requirementId }
+    };
+    
+    const [rows] = await bigquery.query(options);
+    return rows as ComplianceReport[];
   }
 
   async createComplianceReport(insertReport: InsertComplianceReport): Promise<ComplianceReport> {
-    const [report] = await db
-      .insert(complianceReports)
-      .values(insertReport)
-      .returning();
-    return report;
+    const table = bigquery.dataset(DATASET_ID).table(TABLES.complianceReports);
+    const row = {
+      id: uuidv4(),
+      ...insertReport,
+      created_at: new Date().toISOString()
+    };
+    
+    await table.insert([row]);
+    return row as ComplianceReport;
   }
 }
 
-export const storage = new DatabaseStorage();
+export const storage = new BigQueryStorage();

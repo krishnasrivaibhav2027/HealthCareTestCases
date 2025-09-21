@@ -4,7 +4,11 @@ import { v4 as uuidv4 } from 'uuid';
 // Initialize BigQuery client
 export const bigquery = new BigQuery({
   projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
-  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+  ...(process.env.GOOGLE_APPLICATION_CREDENTIALS && 
+      process.env.GOOGLE_APPLICATION_CREDENTIALS.startsWith('/') ? 
+      { keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS } : 
+      {}
+  ),
 });
 
 // Dataset and table configuration
@@ -17,19 +21,38 @@ export const TABLES = {
 
 // Initialize dataset and tables if they don't exist
 export async function initializeBigQuery() {
-  const dataset = bigquery.dataset(DATASET_ID);
-  
-  // Check if dataset exists, create if not
-  const [datasetExists] = await dataset.exists();
-  if (!datasetExists) {
-    await dataset.create();
-    console.log(`Dataset ${DATASET_ID} created.`);
-  }
+  try {
+    // Check if credentials are properly set
+    if (!process.env.GOOGLE_CLOUD_PROJECT_ID) {
+      throw new Error('GOOGLE_CLOUD_PROJECT_ID is not set');
+    }
+    
+    if (!process.env.GOOGLE_APPLICATION_CREDENTIALS || 
+        !process.env.GOOGLE_APPLICATION_CREDENTIALS.startsWith('/')) {
+      console.warn('GOOGLE_APPLICATION_CREDENTIALS must be a valid Linux file path starting with /');
+      console.warn('Please upload your service account JSON file to Replit and set the full path');
+      return; // Skip initialization for now
+    }
 
-  // Create tables if they don't exist
-  await createRequirementsTable();
-  await createTestCasesTable();
-  await createComplianceReportsTable();
+    const dataset = bigquery.dataset(DATASET_ID);
+    
+    // Check if dataset exists, create if not
+    const [datasetExists] = await dataset.exists();
+    if (!datasetExists) {
+      await dataset.create();
+      console.log(`Dataset ${DATASET_ID} created.`);
+    }
+
+    // Create tables if they don't exist
+    await createRequirementsTable();
+    await createTestCasesTable();
+    await createComplianceReportsTable();
+    
+    console.log('BigQuery initialization completed successfully');
+  } catch (error) {
+    console.error('BigQuery initialization failed:', error);
+    console.log('The application will continue without BigQuery functionality');
+  }
 }
 
 async function createRequirementsTable() {
