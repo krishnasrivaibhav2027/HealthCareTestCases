@@ -1,0 +1,23 @@
+{
+  "name": "app",
+  "version": "1.0.0",
+  "description": "Gen AI application for generating the test cases for Health care systems",
+  "main": "index.js",
+  "scripts": {
+    
+    "name": "my-app",
+    "version": "1.0.0",
+    "scripts": {
+    "start": "node index.js"
+  }
+  
+}
+
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
