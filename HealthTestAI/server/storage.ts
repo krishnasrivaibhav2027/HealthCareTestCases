@@ -244,17 +244,9 @@ class BigQueryStorage implements IStorage {
 let storageInstance: IStorage;
 
 function createStorage(): IStorage {
-  // Check if BigQuery credentials are available and properly configured
-  const hasValidCredentials = process.env.GOOGLE_CLOUD_PROJECT_ID && 
-    process.env.GOOGLE_APPLICATION_CREDENTIALS;
-    
-  if (hasValidCredentials) {
-    console.log('Using BigQuery storage');
-    return new BigQueryStorage();
-  } else {
-    console.log('Using in-memory storage (BigQuery credentials not available)');
-    return new MemoryStorage();
-  }
+  // For now, let's force memory storage to avoid BigQuery authentication issues
+  console.log('Using in-memory storage');
+  return new MemoryStorage();
 }
 
 export const storage = createStorage();
